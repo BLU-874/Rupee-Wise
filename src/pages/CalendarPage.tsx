@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import type { FinancialState, Transaction, Category } from "../types/finance";
 import { formatINR, CATEGORY_COLORS } from "../utils/finance";
+import { validateExpenseAmount } from "../utils/sanitize";
 import {
   getTodayLocalISO,
   parseLocalDate,
@@ -166,9 +167,9 @@ export default function CalendarPage({ state, onAddTransaction }: CalendarPagePr
       return;
     }
 
-    const numAmount = Number(formAmount);
-    if (!formAmount || isNaN(numAmount) || numAmount <= 0) {
-      setFormError("Please enter a valid amount greater than ₹0.");
+    const validation = validateExpenseAmount(formAmount, 1, 100000);
+    if (!validation.isValid) {
+      setFormError(validation.error || "Please enter a valid amount greater than ₹0.");
       return;
     }
 
@@ -178,7 +179,7 @@ export default function CalendarPage({ state, onAddTransaction }: CalendarPagePr
       return;
     }
 
-    const sanitizedAmount = Math.max(1, Math.round(numAmount));
+    const sanitizedAmount = validation.amount;
     const finalDescription = formNote.trim() ? `${desc} (${formNote.trim()})` : desc;
 
     onAddTransaction({

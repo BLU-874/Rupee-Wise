@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import type { FinancialState, Category, PurchaseInput } from "../types/finance";
 import { simulatePurchase, formatINR } from "../utils/finance";
+import { validateExpenseAmount } from "../utils/sanitize";
 
 interface DecisionSimulatorProps {
   state: FinancialState;
@@ -75,12 +76,12 @@ export default function DecisionSimulator({ state, onConfirmPurchase }: Decision
 
   const maxAmount = Math.max(state.startingBudget * 1.5, 20000);
 
-  const numericAmount = useMemo(() => {
-    const val = parseInt(amountInput, 10);
-    return isNaN(val) ? 0 : val;
-  }, [amountInput]);
-
-  const isValidAmount = numericAmount > 0 && numericAmount <= 50000;
+  const amountValidation = useMemo(
+    () => validateExpenseAmount(amountInput, 1, 50000),
+    [amountInput]
+  );
+  const numericAmount = amountValidation.amount;
+  const isValidAmount = amountValidation.isValid && numericAmount > 0;
 
   const simulation = useMemo(() => {
     if (!isValidAmount) return null;
@@ -107,7 +108,7 @@ export default function DecisionSimulator({ state, onConfirmPurchase }: Decision
   }
 
   function handleConfirm() {
-    if (!simulation || !isValidAmount || isSubmitting) return;
+    if (!simulation || !isValidAmount || isSubmitting || !amountValidation.isValid || amountValidation.amount <= 0) return;
 
     // Consequential action confirmation
     if ((numericAmount > 2000 || simulation.outcomeType === "high_risk") && !showConfirmDialog) {
@@ -297,7 +298,7 @@ export default function DecisionSimulator({ state, onConfirmPurchase }: Decision
               </div>
               {!isValidAmount && (
                 <p className="text-[11px] text-[#D65D69] font-medium mt-1">
-                  Please enter a valid amount between ₹1 and ₹50,000.
+                  {amountValidation.error || "Please enter a valid amount between ₹1 and ₹50,000."}
                 </p>
               )}
             </div>

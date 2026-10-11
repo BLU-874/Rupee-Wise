@@ -21,7 +21,12 @@ export function simulatePurchase(
   customCategory: string = "miscellaneous"
 ): SimulationResult {
   const before = computeMetrics(state);
-  const sanitizedAmount = Math.max(0, Math.round(purchaseAmount));
+  const sanitizedAmount =
+    typeof purchaseAmount === "number" &&
+    Number.isFinite(purchaseAmount) &&
+    !Number.isNaN(purchaseAmount)
+      ? Math.max(0, Math.min(100_000_000, Math.round(purchaseAmount)))
+      : 0;
 
   // Create simulated state with the proposed purchase applied
   const simulatedState: FinancialState = {

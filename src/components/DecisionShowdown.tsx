@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { FinancialState, Category, PurchaseInput, ShowdownOptionInput } from "../types/finance";
 import { evaluateShowdown, formatINR } from "../utils/finance";
-import { sanitizeText, sanitizeAmount } from "../utils/sanitize";
+import { sanitizeText, validateExpenseAmount } from "../utils/sanitize";
 
 interface DecisionShowdownProps {
   state: FinancialState;
@@ -57,12 +57,15 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
 
   const [confirmedChoice, setConfirmedChoice] = useState<"A" | "B" | null>(null);
 
-  // Parsed and bounded numeric values
-  const numA = useMemo(() => sanitizeAmount(amtA, 1, 50000, 0), [amtA]);
-  const numB = useMemo(() => sanitizeAmount(amtB, 1, 50000, 0), [amtB]);
+  // User input validation (rejects negative, 0, non-numeric, or non-finite inputs)
+  const valA = useMemo(() => validateExpenseAmount(amtA, 1, 50000), [amtA]);
+  const valB = useMemo(() => validateExpenseAmount(amtB, 1, 50000), [amtB]);
 
-  const isValidA = numA > 0;
-  const isValidB = numB > 0;
+  const numA = valA.amount;
+  const numB = valB.amount;
+
+  const isValidA = valA.isValid && numA > 0;
+  const isValidB = valB.isValid && numB > 0;
   const isReady = isValidA && isValidB;
 
   const showdown = useMemo(() => {
@@ -103,6 +106,8 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
 
   function handleConfirmOption(optionKey: "A" | "B") {
     if (!isReady || !showdown) return;
+    const targetValidation = optionKey === "A" ? valA : valB;
+    if (!targetValidation.isValid || targetValidation.amount <= 0) return;
 
     const opt = optionKey === "A" ? showdown.optionA.option : showdown.optionB.option;
     onConfirmPurchase({
@@ -220,8 +225,17 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
                 max="50000"
                 value={amtA}
                 onChange={(e) => setAmtA(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[#E8E5F0] text-sm text-[#211F35] focus:outline-none focus:border-[#5138EC] tabular-nums"
+                className={`w-full px-3 py-2 rounded-xl border text-sm text-[#211F35] focus:outline-none tabular-nums transition-colors ${
+                  !isValidA
+                    ? "border-[#D65D69] focus:border-[#D65D69] bg-[#FDF4F5]"
+                    : "border-[#E8E5F0] focus:border-[#5138EC]"
+                }`}
               />
+              {!isValidA && (
+                <p className="text-[11px] text-[#D65D69] font-medium mt-1">
+                  {valA.error || "Please enter a valid amount between ₹1 and ₹50,000."}
+                </p>
+              )}
             </div>
 
             <div>
@@ -308,8 +322,17 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
                 max="50000"
                 value={amtB}
                 onChange={(e) => setAmtB(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[#E8E5F0] text-sm text-[#211F35] focus:outline-none focus:border-[#7661F5] tabular-nums"
+                className={`w-full px-3 py-2 rounded-xl border text-sm text-[#211F35] focus:outline-none tabular-nums transition-colors ${
+                  !isValidB
+                    ? "border-[#D65D69] focus:border-[#D65D69] bg-[#FDF4F5]"
+                    : "border-[#E8E5F0] focus:border-[#7661F5]"
+                }`}
               />
+              {!isValidB && (
+                <p className="text-[11px] text-[#D65D69] font-medium mt-1">
+                  {valB.error || "Please enter a valid amount between ₹1 and ₹50,000."}
+                </p>
+              )}
             </div>
 
             <div>
@@ -352,7 +375,7 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
       </div>
 
       {/* ── Three-Way Comparison Matrix ── */}
-      {showdown && cur && sA && sB && rec && (
+      {showdown && cur && sA && sB && rec ? (
         <div className="space-y-4">
           {/* Smart Recommendation Banner */}
           <div
@@ -593,12 +616,12 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
             <button
               type="button"
               onClick={() => handleConfirmOption("A")}
-              disabled={confirmedChoice !== null}
+              disabled={confirmedChoice !== null || !isValidA || numA <= 0}
               className={`p-3.5 rounded-2xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
                 rec.winner === "A"
                   ? "bg-gradient-to-r from-[#7661F5] to-[#5138EC] hover:from-[#8875FF] hover:to-[#5E47F3] text-white border-transparent"
                   : "bg-white hover:bg-[#F7F6FC] text-[#211F35] border-[#E8E5F0]"
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {confirmedChoice === "A" ? (
                 <>
@@ -616,12 +639,12 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
             <button
               type="button"
               onClick={() => handleConfirmOption("B")}
-              disabled={confirmedChoice !== null}
+              disabled={confirmedChoice !== null || !isValidB || numB <= 0}
               className={`p-3.5 rounded-2xl border font-semibold text-xs transition-all flex items-center justify-center gap-2 shadow-sm ${
                 rec.winner === "B"
                   ? "bg-gradient-to-r from-[#7661F5] to-[#5138EC] hover:from-[#8875FF] hover:to-[#5E47F3] text-white border-transparent"
                   : "bg-white hover:bg-[#F7F6FC] text-[#211F35] border-[#E8E5F0]"
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {confirmedChoice === "B" ? (
                 <>
@@ -636,6 +659,12 @@ export default function DecisionShowdown({ state, onConfirmPurchase }: DecisionS
               )}
             </button>
           </div>
+        </div>
+      ) : (
+        <div className="p-5 rounded-2xl border border-[#E8E5F0] bg-white text-center shadow-xs">
+          <p className="text-xs text-[#77748B] font-medium">
+            Enter valid amounts between ₹1 and ₹50,000 for both Option A and Option B to generate the comparative showdown matrix.
+          </p>
         </div>
       )}
     </div>

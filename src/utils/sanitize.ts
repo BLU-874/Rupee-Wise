@@ -54,7 +54,50 @@ export function sanitizeEmail(email: unknown): string {
 }
 
 /**
+ * Result returned by user-facing amount validation.
+ */
+export interface AmountValidationResult {
+  isValid: boolean;
+  amount: number;
+  error?: string;
+}
+
+/**
+ * Validates a user-entered transaction amount.
+ * Rejects negative, zero, malformed, non-numeric, or non-finite inputs
+ * instead of silently converting them to ₹1.
+ */
+export function validateExpenseAmount(
+  raw: unknown,
+  min = 1,
+  max = 100_000
+): AmountValidationResult {
+  if (raw === undefined || raw === null || raw === "") {
+    return { isValid: false, amount: 0, error: "Please enter an amount." };
+  }
+  const str = String(raw).trim();
+  if (str === "") {
+    return { isValid: false, amount: 0, error: "Please enter an amount." };
+  }
+  const num = Number(str);
+  if (!Number.isFinite(num) || Number.isNaN(num)) {
+    return { isValid: false, amount: 0, error: "Please enter a valid numeric amount." };
+  }
+  if (num <= 0) {
+    return { isValid: false, amount: 0, error: "Amount must be greater than ₹0." };
+  }
+  if (num < min) {
+    return { isValid: false, amount: 0, error: `Amount must be at least ₹${min}.` };
+  }
+  if (num > max) {
+    return { isValid: false, amount: 0, error: `Amount cannot exceed ₹${max.toLocaleString("en-IN")}.` };
+  }
+  return { isValid: true, amount: Math.round(num) };
+}
+
+/**
  * Sanitizes a financial rupee amount, enforcing positive integer bounds.
+ * Used for storage persistence fallback and defensive bounding.
  */
 export function sanitizeAmount(
   amount: unknown,

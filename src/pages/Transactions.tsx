@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, ArrowUpCircle, ArrowDownCircle, Search } from "lucide-react";
 import type { FinancialState, Transaction, Category } from "../types/finance";
 import { formatINR, CATEGORY_COLORS } from "../utils/finance";
+import { validateExpenseAmount } from "../utils/sanitize";
 
 interface TransactionsProps {
   state: FinancialState;
@@ -38,15 +39,12 @@ export default function Transactions({ state, onAddTransaction }: TransactionsPr
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
-    const amt = parseInt(form.amount, 10);
-    if (isNaN(amt) || amt <= 0) {
-      setErrorMsg("Please enter a valid amount greater than ₹0.");
+    const validation = validateExpenseAmount(form.amount, 1, 100000);
+    if (!validation.isValid) {
+      setErrorMsg(validation.error || "Please enter a valid amount greater than ₹0.");
       return;
     }
-    if (amt > 100000) {
-      setErrorMsg("Amount exceeds reasonable limit (₹1,00,000).");
-      return;
-    }
+    const amt = validation.amount;
 
     onAddTransaction({
       amount: amt,

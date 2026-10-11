@@ -205,6 +205,7 @@ import {
   sanitizeText,
   sanitizeEmail,
   sanitizeAmount,
+  validateExpenseAmount,
   sanitizeCategory,
   isValidDateString,
 } from "./src/utils/sanitize";
@@ -413,10 +414,29 @@ const invalidAmount = -100;
 const sanitizedAmount = sanitizeAmount(invalidAmount, 1, 50000, 0);
 const passInvalidRejection = sanitizedAmount === 1;
 
-if (passConfirmOptionA && passInvalidRejection) {
-  console.log("✓ PASS: Confirming a showdown option records exactly one ledger expense, and invalid amounts are safely bounded.");
+// User input validation check: ensures negative, zero, malformed, non-finite amounts cannot be confirmed
+const negValidation = validateExpenseAmount(-100);
+const zeroValidation = validateExpenseAmount(0);
+const malformedValidation = validateExpenseAmount("abc");
+const nonFiniteValidation = validateExpenseAmount(Infinity);
+const validExpenseValidation = validateExpenseAmount("800");
+
+const passValidationRejection =
+  negValidation.isValid === false &&
+  zeroValidation.isValid === false &&
+  malformedValidation.isValid === false &&
+  nonFiniteValidation.isValid === false &&
+  validExpenseValidation.isValid === true &&
+  validExpenseValidation.amount === 800;
+
+if (passConfirmOptionA && passInvalidRejection && passValidationRejection) {
+  console.log("✓ PASS: Confirming a showdown option records exactly one ledger expense, and negative/zero/malformed amounts are strictly rejected with validation errors.");
 } else {
-  console.error("✗ FAIL: Showdown confirmation integrity failed!");
+  console.error("✗ FAIL: Showdown confirmation integrity failed!", {
+    passConfirmOptionA,
+    passInvalidRejection,
+    passValidationRejection,
+  });
 }
 
 // Restore original localStorage if present
