@@ -443,6 +443,13 @@ export default function DecisionSimulator({ state, onConfirmPurchase }: Decision
                 deltaText={simulation.deltas.healthScore !== 0 ? `${simulation.deltas.healthScore} pts` : "±0"}
                 deltaType={simulation.deltas.healthScore < 0 ? "negative" : "neutral"}
               />
+              <MetricRow
+                label="Risk Level"
+                before={b.riskLevel}
+                after={a.riskLevel}
+                deltaText={b.riskLevel !== a.riskLevel ? `Shifted to ${a.riskLevel}` : "Stable"}
+                deltaType={a.riskLevel === "High" ? "negative" : a.riskLevel === "Moderate" ? "neutral" : "positive"}
+              />
             </div>
           ) : (
             <div className="py-12 text-center text-[#C4C0DB]">

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useCallback, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, RotateCcw, Sparkles } from "lucide-react";
 import Sidebar from "./components/Sidebar";
@@ -6,6 +6,9 @@ import HeroSection from "./components/HeroSection";
 import WorkspaceSkeleton from "./components/WorkspaceSkeleton";
 import OnboardingModal from "./components/OnboardingModal";
 import ProfileModal from "./components/ProfileModal";
+import { useFinancialState, useUserProfile } from "./hooks";
+import { createNewUserFinancialState } from "./utils/storage";
+import type { Page, UserProfile } from "./types/finance";
 
 // Lazy-loaded workspace pages for optimal initial bundle loading
 const Overview = lazy(() => import("./pages/Overview"));
@@ -14,27 +17,6 @@ const Transactions = lazy(() => import("./pages/Transactions"));
 const DecisionLab = lazy(() => import("./pages/DecisionLab"));
 const SavingsGoals = lazy(() => import("./pages/SavingsGoals"));
 const Commitments = lazy(() => import("./pages/Commitments"));
-import { DEMO_STATE, DEMO_PROFILE } from "./data/demoData";
-import {
-  loadState,
-  saveState,
-  clearState,
-  loadProfile,
-  saveProfile,
-  clearProfile,
-  createNewUserFinancialState,
-} from "./utils/storage";
-import { computeMetrics } from "./utils/finance";
-import { calculateChallengeProgress, getTodayLocalISO } from "./utils/dateUtils";
-import type {
-  FinancialState,
-  Transaction,
-  Commitment,
-  SavingsGoal,
-  PurchaseInput,
-  UserProfile,
-  Page,
-} from "./types/finance";
 
 const PAGE_TITLES: Record<Page, string> = {
   overview: "Overview",
@@ -45,10 +27,6 @@ const PAGE_TITLES: Record<Page, string> = {
   commitments: "Commitments",
 };
 
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
-
 function getGreeting(): string {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -57,198 +35,38 @@ function getGreeting(): string {
 }
 
 export default function App() {
-  const [profile, setProfile] = useState<UserProfile | null>(() => {
-    return loadProfile();
-  });
+  const {
+    state,
+    metrics,
+    challenge,
+    addTransaction,
+    confirmPurchase,
+    markCommitmentPaid,
+    cancelCommitment,
+    addCommitment,
+    updateGoal,
+    addSavings,
+    addGoal,
+    resetDemoData,
+    startNewChallenge,
+    loadDemoData,
+    setFinancialState,
+  } = useFinancialState();
 
-  const [state, setState] = useState<FinancialState>(() => {
-    const saved = loadState();
-    return saved ?? DEMO_STATE;
-  });
+  const {
+    profile,
+    userDisplayName,
+    userInitials,
+    handleSaveProfile,
+    handleResetProfile,
+    handleCompleteOnboarding,
+  } = useUserProfile();
 
   const [activePage, setActivePage] = useState<Page>("overview");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-
-  // Persist financial state on every change
-  useEffect(() => {
-    saveState(state);
-  }, [state]);
-
-  const metrics = computeMetrics(state);
-  const challenge = calculateChallengeProgress(state.periodStart, state.totalDays);
-
-  // ── mutation helpers ──────────────────────────────────────────────────────
-
-  const addTransaction = useCallback((tx: Omit<Transaction, "id">) => {
-    const sanitizedAmount = Math.max(1, Math.round(tx.amount));
-    setState((s) => ({
-      ...s,
-      transactions: [
-        ...s.transactions,
-        {
-          ...tx,
-          amount: sanitizedAmount,
-          description: tx.description.trim() || tx.category,
-          id: generateId(),
-        },
-      ],
-    }));
-  }, []);
-
-  const confirmPurchase = useCallback((purchase: PurchaseInput) => {
-    const sanitizedAmount = Math.max(1, Math.round(purchase.amount));
-    addTransaction({
-      amount: sanitizedAmount,
-      category: purchase.category,
-      description: purchase.description.trim() || purchase.category,
-      date: new Date().toISOString().slice(0, 10),
-      type: "expense",
-    });
-  }, [addTransaction]);
-
-  const markCommitmentPaid = useCallback((id: string) => {
-    setState((s) => {
-      const commitment = s.commitments.find((c) => c.id === id);
-      if (!commitment || commitment.status !== "unpaid") return s;
-
-      const updatedCommitments = s.commitments.map((c) =>
-        c.id === id ? { ...c, status: "paid" as const } : c
-      );
-
-      // Record corresponding bill payment transaction exactly once
-      const paidTx: Transaction = {
-        id: generateId(),
-        date: new Date().toISOString().slice(0, 10),
-        amount: commitment.amount,
-        category: "bills",
-        description: commitment.description,
-        type: "expense",
-      };
-
-      return {
-        ...s,
-        commitments: updatedCommitments,
-        transactions: [...s.transactions, paidTx],
-      };
-    });
-  }, []);
-
-  const cancelCommitment = useCallback((id: string) => {
-    setState((s) => {
-      const commitment = s.commitments.find((c) => c.id === id);
-      if (!commitment || commitment.status !== "unpaid") return s;
-
-      return {
-        ...s,
-        commitments: s.commitments.map((c) =>
-          c.id === id ? { ...c, status: "cancelled" as const } : c
-        ),
-      };
-    });
-  }, []);
-
-  const addCommitment = useCallback((c: Omit<Commitment, "id">) => {
-    const sanitizedAmount = Math.max(1, Math.round(c.amount));
-    setState((s) => ({
-      ...s,
-      commitments: [
-        ...s.commitments,
-        {
-          ...c,
-          amount: sanitizedAmount,
-          description: c.description.trim() || "Commitment",
-          id: generateId(),
-        },
-      ],
-    }));
-  }, []);
-
-  const updateGoal = useCallback((goal: SavingsGoal) => {
-    setState((s) => ({
-      ...s,
-      savingsGoals: s.savingsGoals.map((g) => (g.id === goal.id ? goal : g)),
-    }));
-  }, []);
-
-  const addSavings = useCallback((goalId: string, amount: number) => {
-    const sanitizedAmount = Math.max(1, Math.round(amount));
-    setState((s) => ({
-      ...s,
-      savingsGoals: s.savingsGoals.map((g) =>
-        g.id === goalId
-          ? { ...g, savedAmount: Math.min(g.savedAmount + sanitizedAmount, g.targetAmount) }
-          : g
-      ),
-    }));
-  }, []);
-
-  const addGoal = useCallback((goal: Omit<SavingsGoal, "id">) => {
-    const sanitizedTarget = Math.max(100, Math.round(goal.targetAmount));
-    setState((s) => ({
-      ...s,
-      savingsGoals: [
-        ...s.savingsGoals,
-        {
-          ...goal,
-          targetAmount: sanitizedTarget,
-          savedAmount: 0,
-          id: generateId(),
-        },
-      ],
-    }));
-  }, []);
-
-  // ── onboarding & profile handlers ──────────────────────────────────────────
-
-  const handleOnboardingComplete = (newProfile: UserProfile) => {
-    saveProfile(newProfile);
-    setProfile(newProfile);
-    const freshState = createNewUserFinancialState();
-    saveState(freshState);
-    setState(freshState);
-    setShowOnboarding(false);
-    scrollToWorkspace();
-  };
-
-  const handleSaveProfile = (updatedProfile: UserProfile) => {
-    saveProfile(updatedProfile);
-    setProfile(updatedProfile);
-  };
-
-  const handleStartNewChallenge = () => {
-    const today = getTodayLocalISO();
-    const freshState = createNewUserFinancialState(today);
-    saveState(freshState);
-    setState(freshState);
-  };
-
-  const handleLoadDemoData = () => {
-    saveProfile(DEMO_PROFILE);
-    setProfile(DEMO_PROFILE);
-    saveState(DEMO_STATE);
-    setState(DEMO_STATE);
-  };
-
-  const handleResetProfile = () => {
-    clearProfile();
-    setProfile(null);
-    clearState();
-    setState(createNewUserFinancialState());
-  };
-
-  function handleResetDemoData() {
-    clearState();
-    setState(DEMO_STATE);
-    setShowReset(false);
-  }
-
-  function handleNavigate(page: Page) {
-    setActivePage(page);
-    setMobileOpen(false);
-  }
 
   const scrollToWorkspace = useCallback(() => {
     const el = document.getElementById("workspace");
@@ -257,25 +75,31 @@ export default function App() {
     }
   }, []);
 
-  const userDisplayName = profile?.fullName
-    ? profile.fullName.trim().split(" ")[0]
-    : "Explorer";
+  const handleOnboardingComplete = useCallback(
+    (newProfile: UserProfile) => {
+      handleCompleteOnboarding(newProfile);
+      const freshState = createNewUserFinancialState();
+      setFinancialState(freshState);
+      setShowOnboarding(false);
+      scrollToWorkspace();
+    },
+    [handleCompleteOnboarding, setFinancialState, scrollToWorkspace]
+  );
 
-  const userInitials = profile?.fullName
-    ? profile.fullName
-        .trim()
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((w) => w[0].toUpperCase())
-        .join("")
-    : "RW";
+  const onResetProfile = useCallback(() => {
+    handleResetProfile();
+    const freshState = createNewUserFinancialState();
+    setFinancialState(freshState);
+  }, [handleResetProfile, setFinancialState]);
 
-  // ── render ────────────────────────────────────────────────────────────────
+  const handleNavigate = useCallback((page: Page) => {
+    setActivePage(page);
+    setMobileOpen(false);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-[#F7F6FC] text-[#211F35] scroll-smooth">
-      {/* ── 1. Full-Screen Cinematic Introductory Hero ── */}
+    <div className="min-h-screen bg-[#F7F6FC] text-[#211F35] flex flex-col font-sans">
+      {/* ── 1. Full-Screen Cinematic Hero ── */}
       <HeroSection
         state={state}
         metrics={metrics}
@@ -287,22 +111,24 @@ export default function App() {
       />
 
       {/* ── 2. Interactive Financial Workspace ── */}
-      <div id="workspace" className="flex min-h-screen bg-[#F7F6FC] relative">
+      <div id="workspace" className="flex flex-1 min-h-screen">
+        {/* Navigation Sidebar */}
         <Sidebar
           activePage={activePage}
           onNavigate={handleNavigate}
           mobileOpen={mobileOpen}
-          onMobileToggle={() => setMobileOpen((o) => !o)}
+          onMobileToggle={() => setMobileOpen(!mobileOpen)}
         />
 
+        {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
-          <header className="sticky top-0 z-20 flex items-center justify-between px-6 py-3.5 border-b border-[#E8E5F0] bg-white/95 backdrop-blur-md flex-shrink-0">
+          {/* Top Bar / Header */}
+          <header className="h-16 bg-white/95 backdrop-blur-md border-b border-[#E8E5F0] flex items-center justify-between px-5 lg:px-7 sticky top-0 z-20">
             <div>
-              <p className="text-xs text-[#77748B]">
-                {getGreeting()}, {userDisplayName} 👋 · Day {challenge.currentDay} of {state.totalDays}
+              <p className="text-xs text-[#77748B] font-medium">
+                {getGreeting()}, <span className="font-semibold text-[#211F35]">{userDisplayName}</span>
               </p>
-              <h1 className="text-base font-bold text-[#211F35] tracking-tight">
+              <h1 className="text-lg font-bold text-[#211F35] tracking-tight leading-tight">
                 {PAGE_TITLES[activePage]}
               </h1>
             </div>
@@ -325,8 +151,9 @@ export default function App() {
               {profile ? (
                 <button
                   onClick={() => setShowProfileModal(true)}
-                  className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#F7F6FC] hover:bg-[#F0EEFA] border border-[#E8E5F0] text-xs font-medium text-[#211F35] transition-all"
+                  className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-[#F7F6FC] hover:bg-[#F0EEFA] border border-[#E8E5F0] text-xs font-medium text-[#211F35] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
                   title="Profile & Challenge Settings"
+                  aria-label="Manage profile and challenge settings"
                 >
                   <div
                     className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-xs"
@@ -339,7 +166,7 @@ export default function App() {
               ) : (
                 <button
                   onClick={() => setShowOnboarding(true)}
-                  className="px-3 py-1 rounded-full bg-[#EEEAFE] hover:bg-[#E3DCFE] text-[#5138EC] text-xs font-semibold border border-[#5138EC]/20 flex items-center gap-1.5 transition-all"
+                  className="px-3 py-1 rounded-full bg-[#EEEAFE] hover:bg-[#E3DCFE] text-[#5138EC] text-xs font-semibold border border-[#5138EC]/20 flex items-center gap-1.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
                 >
                   <Sparkles size={13} />
                   <span>Onboard</span>
@@ -367,8 +194,8 @@ export default function App() {
             </div>
           </header>
 
-          {/* Main content */}
-          <main className="flex-1 p-4 md:p-6">
+          {/* Main Content with Suspense and Zero-Layout-Shift Skeleton */}
+          <main className="flex-1 p-5 lg:p-7 max-w-[1400px] w-full mx-auto">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activePage}
@@ -424,7 +251,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── Modals ── */}
+      {/* ── 3. Modals ── */}
 
       {/* Onboarding Modal */}
       <OnboardingModal
@@ -439,9 +266,9 @@ export default function App() {
         profile={profile}
         onClose={() => setShowProfileModal(false)}
         onSave={handleSaveProfile}
-        onResetProfile={handleResetProfile}
-        onStartNewChallenge={handleStartNewChallenge}
-        onLoadDemoData={handleLoadDemoData}
+        onResetProfile={onResetProfile}
+        onStartNewChallenge={startNewChallenge}
+        onLoadDemoData={loadDemoData}
       />
 
       {/* Reset Confirmation Modal */}
@@ -468,7 +295,10 @@ export default function App() {
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={handleResetDemoData}
+                  onClick={() => {
+                    resetDemoData();
+                    setShowReset(false);
+                  }}
                   className="flex-1 bg-[#D65D69] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#c24b57] transition-colors shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D65D69]"
                 >
                   Reset
