@@ -145,4 +145,3 @@ export interface ShowdownComparisonResult {
     savingsPreservedDiff: number;
   };
 }
-
