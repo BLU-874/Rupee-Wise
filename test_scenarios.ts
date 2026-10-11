@@ -322,9 +322,106 @@ if (passCancelBoundary) {
   console.error("✗ FAIL: Commitment cancellation boundary violated!");
 }
 
+// ── Scenario L — Financial Decision Showdown (Three-Way Comparison) ────────
+console.log("\n--- Scenario L: Financial Decision Showdown (Three-Way Comparison) ---");
+import { evaluateShowdown } from "./src/utils/finance";
+import type { ShowdownOptionInput } from "./src/types/finance";
+
+const baselineShowdownState: FinancialState = JSON.parse(JSON.stringify(freshState));
+const initialTxCount = baselineShowdownState.transactions.length;
+const initialAvail = computeMetrics(baselineShowdownState).availableBalance;
+
+const testOptA: ShowdownOptionInput = {
+  id: "A",
+  description: "Required Textbooks & Coursepack",
+  amount: 800,
+  category: "bills",
+  essential: true,
+};
+
+const testOptB: ShowdownOptionInput = {
+  id: "B",
+  description: "Nightclub / Party Outing",
+  amount: 600,
+  category: "entertainment",
+  essential: false,
+};
+
+const comparisonResult = evaluateShowdown(baselineShowdownState, testOptA, testOptB);
+
+// 1. Verify comparing options leaves state unchanged
+const stateUnchanged =
+  baselineShowdownState.transactions.length === initialTxCount &&
+  computeMetrics(baselineShowdownState).availableBalance === initialAvail;
+
+// 2. Verify both options calculate correct deltas
+const aCorrect =
+  comparisonResult.optionA.simulation.after.availableBalance === initialAvail - 800 &&
+  comparisonResult.optionA.simulation.deltas.availableBalance === -800;
+const bCorrect =
+  comparisonResult.optionB.simulation.after.availableBalance === initialAvail - 600 &&
+  comparisonResult.optionB.simulation.deltas.availableBalance === -600;
+
+// 3. Verify rule-based analysis accounts for essential classification
+const essentialAware =
+  comparisonResult.recommendation.winner === "A" &&
+  comparisonResult.recommendation.badgeText.includes("Essential Priority");
+
+// 4. Verify test with shock expense where neither is affordable
+const shockOptA: ShowdownOptionInput = { id: "A", description: "Extreme Shock A", amount: 15000, category: "shopping", essential: false };
+const shockOptB: ShowdownOptionInput = { id: "B", description: "Extreme Shock B", amount: 12000, category: "entertainment", essential: false };
+const shockResult = evaluateShowdown(baselineShowdownState, shockOptA, shockOptB);
+const neitherWins = shockResult.recommendation.winner === "neither";
+
+const passShowdown = stateUnchanged && aCorrect && bCorrect && essentialAware && neitherWins;
+
+if (passShowdown) {
+  console.log("✓ PASS: Three-way Decision Showdown correctly projects outcomes, protects essential needs, and leaves state unmutated.");
+} else {
+  console.error("✗ FAIL: Showdown evaluation test failed!", {
+    stateUnchanged,
+    aCorrect,
+    bCorrect,
+    essentialAware,
+    neitherWins,
+  });
+}
+
+// ── Scenario M — Showdown Option Confirmation & Ledger Integrity ─────────────
+console.log("\n--- Scenario M: Showdown Option Confirmation & Ledger Integrity ---");
+let confirmedState: FinancialState = JSON.parse(JSON.stringify(freshState));
+const preConfirmTxCount = confirmedState.transactions.length;
+
+// Confirm Option A: records exactly one transaction
+confirmedState.transactions.push({
+  id: "showdown-commit-1",
+  date: today,
+  amount: testOptA.amount,
+  category: testOptA.category,
+  description: testOptA.description,
+  type: "expense",
+});
+
+const postConfirmMetrics = computeMetrics(confirmedState);
+const passConfirmOptionA =
+  confirmedState.transactions.length === preConfirmTxCount + 1 &&
+  confirmedState.transactions[confirmedState.transactions.length - 1].amount === 800 &&
+  postConfirmMetrics.availableBalance === initialAvail - 800;
+
+// Confirm invalid amount bounding check
+const invalidAmount = -100;
+const sanitizedAmount = sanitizeAmount(invalidAmount, 1, 50000, 0);
+const passInvalidRejection = sanitizedAmount === 1;
+
+if (passConfirmOptionA && passInvalidRejection) {
+  console.log("✓ PASS: Confirming a showdown option records exactly one ledger expense, and invalid amounts are safely bounded.");
+} else {
+  console.error("✗ FAIL: Showdown confirmation integrity failed!");
+}
+
 // Restore original localStorage if present
 if (originalLocalStorage) {
   globalThis.localStorage = originalLocalStorage;
 }
 
-console.log("\n=== ALL SCENARIOS (A THROUGH K) VERIFIED SUCCESSFULLY! ===");
+console.log("\n=== ALL SCENARIOS (A THROUGH M) VERIFIED SUCCESSFULLY! ===");

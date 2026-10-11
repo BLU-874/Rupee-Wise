@@ -119,3 +119,30 @@ export interface ChallengeProgress {
   isCompleted: boolean;
   status: "active" | "completed" | "upcoming";
 }
+
+export interface ShowdownOptionInput {
+  id: "A" | "B";
+  description: string;
+  amount: number;
+  category: Category;
+  essential: boolean;
+}
+
+export interface ShowdownOptionEvaluation {
+  option: ShowdownOptionInput;
+  simulation: SimulationResult;
+}
+
+export interface ShowdownComparisonResult {
+  current: FinancialMetrics;
+  optionA: ShowdownOptionEvaluation;
+  optionB: ShowdownOptionEvaluation;
+  recommendation: {
+    winner: "A" | "B" | "neither" | "tie";
+    badgeText: string;
+    headline: string;
+    analysis: string;
+    savingsPreservedDiff: number;
+  };
+}
+
