@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "framer-motion";
 import { TrendingDown, TrendingUp, Calendar, IndianRupee } from "lucide-react";
 import type { FinancialState, FinancialMetrics } from "../types/finance";

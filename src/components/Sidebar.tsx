@@ -48,27 +48,29 @@ export default function Sidebar({
         </div>
         <button
           onClick={onMobileToggle}
-          className="ml-auto lg:hidden text-[#C4C0DB] hover:text-white"
+          className="ml-auto lg:hidden text-[#C4C0DB] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6A8FF] rounded-lg p-1"
+          aria-label="Close navigation sidebar"
         >
           <X size={18} />
         </button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1.5">
+      <nav className="flex-1 px-3 py-4 space-y-1.5" aria-label="Main Navigation">
         {NAV_ITEMS.map(({ id, label, Icon }) => {
           const active = activePage === id;
           return (
             <button
               key={id}
               onClick={() => { onNavigate(id); onMobileToggle(); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group ${
+              aria-current={active ? "page" : undefined}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B6A8FF] ${
                 active
                   ? "bg-gradient-to-r from-[#7661F5] to-[#5138EC] text-white shadow-xs font-semibold"
                   : "text-[#C4C0DB] hover:text-white hover:bg-[#292641]"
               }`}
             >
-              <Icon size={17} className={active ? "text-white" : "text-[#C4C0DB] group-hover:text-white"} />
+              <Icon size={17} className={active ? "text-white" : "text-[#C4C0DB] group-hover:text-white"} aria-hidden="true" />
               <span>{label}</span>
               {active && (
                 <motion.div

@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Mail, Palette, X, Check, Sparkles } from "lucide-react";
 import type { UserProfile } from "../types/finance";
+import { sanitizeText, sanitizeEmail } from "../utils/sanitize";
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -35,19 +36,32 @@ function ProfileModalContent({
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmNewChallenge, setConfirmNewChallenge] = useState(false);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const cleanName = sanitizeText(fullName, 50);
+    const cleanEmail = sanitizeEmail(email);
+
     onSave({
       ...profile,
-      fullName: fullName.trim() || profile.fullName,
-      email: email.trim() || profile.email,
+      fullName: cleanName || profile.fullName,
+      email: cleanEmail || profile.email,
       avatarColor,
     });
     onClose();
   }
 
-  const initials = (fullName || profile.fullName || "RW")
-    .trim()
+  const cleanInitialsName = sanitizeText(fullName || profile.fullName, 50);
+  const initials = (cleanInitialsName || "RW")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -55,7 +69,12 @@ function ProfileModalContent({
     .join("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="profile-modal-title"
+    >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -65,8 +84,9 @@ function ProfileModalContent({
       >
         {/* Close button */}
         <button
+          type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-2 rounded-xl text-[#77748B] hover:text-[#211F35] hover:bg-[#F0EEFA] transition-colors"
+          className="absolute top-5 right-5 p-2 rounded-xl text-[#77748B] hover:text-[#211F35] hover:bg-[#F0EEFA] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC] transition-colors"
           aria-label="Close profile modal"
         >
           <X size={18} />
@@ -77,11 +97,12 @@ function ProfileModalContent({
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-base shadow-sm border border-white/20"
             style={{ backgroundColor: avatarColor }}
+            aria-label={`Current avatar profile preview: ${initials}`}
           >
             {initials}
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#211F35] tracking-tight">Your Profile</h2>
+            <h2 id="profile-modal-title" className="text-lg font-bold text-[#211F35] tracking-tight">Your Profile</h2>
             <p className="text-xs text-[#77748B]">Personalize your simulation identity</p>
           </div>
         </div>
@@ -89,13 +110,15 @@ function ProfileModalContent({
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Full Name */}
           <div>
-            <label className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
-              <User size={13} className="text-[#77748B]" />
-              Full Name
+            <label htmlFor="profile-fullname" className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
+              <User size={13} className="text-[#77748B]" aria-hidden="true" />
+              <span>Full Name</span>
             </label>
             <input
+              id="profile-fullname"
               type="text"
               value={fullName}
+              maxLength={50}
               onChange={(e) => setFullName(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-[#E8E5F0] text-sm text-[#211F35] focus:outline-none focus:border-[#5138EC] focus:ring-2 focus:ring-[#5138EC]/15 transition-all"
             />
@@ -103,13 +126,15 @@ function ProfileModalContent({
 
           {/* Email */}
           <div>
-            <label className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
-              <Mail size={13} className="text-[#77748B]" />
-              Email Address
+            <label htmlFor="profile-email" className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
+              <Mail size={13} className="text-[#77748B]" aria-hidden="true" />
+              <span>Email Address</span>
             </label>
             <input
+              id="profile-email"
               type="email"
               value={email}
+              maxLength={100}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2.5 rounded-xl border border-[#E8E5F0] text-sm text-[#211F35] focus:outline-none focus:border-[#5138EC] focus:ring-2 focus:ring-[#5138EC]/15 transition-all"
             />
@@ -118,22 +143,23 @@ function ProfileModalContent({
           {/* Avatar Color */}
           <div>
             <label className="block text-xs font-semibold text-[#211F35] mb-2 flex items-center gap-1.5">
-              <Palette size={13} className="text-[#77748B]" />
-              Avatar Color
+              <Palette size={13} className="text-[#77748B]" aria-hidden="true" />
+              <span>Avatar Color</span>
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" role="group" aria-label="Avatar color options">
               {AVATAR_COLORS.map((c) => (
                 <button
                   key={c.hex}
                   type="button"
                   onClick={() => setAvatarColor(c.hex)}
-                  className={`w-7 h-7 rounded-xl transition-transform ${
+                  className={`w-7 h-7 rounded-xl transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC] ${
                     avatarColor === c.hex
                       ? "ring-2 ring-offset-2 ring-[#5138EC] scale-110"
                       : "hover:scale-105 opacity-85 hover:opacity-100"
                   }`}
                   style={{ backgroundColor: c.hex }}
                   aria-label={`Select ${c.label} color`}
+                  aria-pressed={avatarColor === c.hex}
                 />
               ))}
             </div>
@@ -143,7 +169,7 @@ function ProfileModalContent({
           <div className="pt-2">
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#7661F5] to-[#5138EC] hover:from-[#8875FF] hover:to-[#5E47F3] text-white font-semibold text-xs shadow-md shadow-[#5138EC]/20 transition-all flex items-center justify-center gap-1.5"
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#7661F5] to-[#5138EC] hover:from-[#8875FF] hover:to-[#5E47F3] text-white font-semibold text-xs shadow-md shadow-[#5138EC]/20 transition-all flex items-center justify-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
             >
               <Check size={14} />
               <span>Save Profile Changes</span>
@@ -158,7 +184,7 @@ function ProfileModalContent({
             <button
               type="button"
               onClick={() => setConfirmNewChallenge(true)}
-              className="w-full py-2 px-3 rounded-xl border border-[#E8E5F0] bg-[#F7F6FC] hover:bg-[#EEEAFE] hover:border-[#5138EC]/30 text-xs font-medium text-[#5138EC] transition-all flex items-center justify-center gap-2"
+              className="w-full py-2 px-3 rounded-xl border border-[#E8E5F0] bg-[#F7F6FC] hover:bg-[#EEEAFE] hover:border-[#5138EC]/30 text-xs font-medium text-[#5138EC] transition-all flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
             >
               <Sparkles size={13} />
               <span>Start a New 30-Day Challenge</span>
@@ -179,14 +205,14 @@ function ProfileModalContent({
                     setConfirmNewChallenge(false);
                     onClose();
                   }}
-                  className="flex-1 py-1.5 rounded-lg bg-[#C98B27] text-white text-xs font-semibold hover:bg-[#b07820]"
+                  className="flex-1 py-1.5 rounded-lg bg-[#C98B27] text-white text-xs font-semibold hover:bg-[#b07820] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C98B27]"
                 >
                   Confirm Start
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmNewChallenge(false)}
-                  className="flex-1 py-1.5 rounded-lg bg-white border border-[#E8E5F0] text-xs text-[#77748B]"
+                  className="flex-1 py-1.5 rounded-lg bg-white border border-[#E8E5F0] text-xs text-[#77748B] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
                 >
                   Cancel
                 </button>
@@ -201,7 +227,7 @@ function ProfileModalContent({
               onLoadDemoData();
               onClose();
             }}
-            className="w-full py-2 px-3 rounded-xl border border-[#E8E5F0] bg-[#F7F6FC] hover:bg-white text-xs font-medium text-[#77748B] hover:text-[#211F35] transition-all flex items-center justify-center gap-2"
+            className="w-full py-2 px-3 rounded-xl border border-[#E8E5F0] bg-[#F7F6FC] hover:bg-white text-xs font-medium text-[#77748B] hover:text-[#211F35] transition-all flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
           >
             <span>Load Populated Demo State (Arjun Sharma, ₹7,162)</span>
           </button>
@@ -211,7 +237,7 @@ function ProfileModalContent({
             <button
               type="button"
               onClick={() => setConfirmReset(true)}
-              className="w-full text-center py-1 text-[11px] text-[#D65D69] hover:underline transition-all"
+              className="w-full text-center py-1 text-[11px] text-[#D65D69] hover:underline transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D65D69]"
             >
               Reset profile & onboarding state
             </button>
@@ -228,14 +254,14 @@ function ProfileModalContent({
                     setConfirmReset(false);
                     onClose();
                   }}
-                  className="flex-1 py-1.5 rounded-lg bg-[#D65D69] text-white text-xs font-semibold hover:bg-[#c24b57]"
+                  className="flex-1 py-1.5 rounded-lg bg-[#D65D69] text-white text-xs font-semibold hover:bg-[#c24b57] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D65D69]"
                 >
                   Confirm Reset
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmReset(false)}
-                  className="flex-1 py-1.5 rounded-lg bg-white border border-[#E8E5F0] text-xs text-[#77748B]"
+                  className="flex-1 py-1.5 rounded-lg bg-white border border-[#E8E5F0] text-xs text-[#77748B] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
                 >
                   Cancel
                 </button>

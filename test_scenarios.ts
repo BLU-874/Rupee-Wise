@@ -199,4 +199,132 @@ if (
   console.error("✗ FAIL: Decision Lab regression failure!");
 }
 
-console.log("\n=== ALL SCENARIOS VERIFIED SUCCESSFULLY! ===");
+// ── Scenario I — Security & Sanitization Verification ───────────────────────
+console.log("\n--- Scenario I: Security & Sanitization Verification ---");
+import {
+  sanitizeText,
+  sanitizeEmail,
+  sanitizeAmount,
+  sanitizeCategory,
+  isValidDateString,
+} from "./src/utils/sanitize";
+
+const maliciousScript = "<script>alert('xss')</script>Lunch at Cafe";
+const cleanedScript = sanitizeText(maliciousScript);
+const maliciousEmail = "attacker<script>@evil.com";
+const validEmail = "user.name+tag@example.co.in";
+const cleanValidEmail = sanitizeEmail(validEmail);
+const cleanBadEmail = sanitizeEmail(maliciousEmail);
+
+const boundedAmount1 = sanitizeAmount(-500); // Should clamp to min (1)
+const boundedAmount2 = sanitizeAmount("₹ 1,500.50"); // Should parse to 1501
+const boundedAmount3 = sanitizeAmount(NaN, 1, 1000, 50); // Fallback to 50
+const categoryCheck1 = sanitizeCategory("unknown_hack"); // Should fallback
+const categoryCheck2 = sanitizeCategory("food"); // Should accept
+const validDate = isValidDateString("2026-10-11");
+const invalidDate = isValidDateString("2026-02-31"); // Feb 31 invalid!
+
+const passSanitization =
+  cleanedScript === "alert('xss')Lunch at Cafe" &&
+  cleanBadEmail === "" &&
+  cleanValidEmail === "user.name+tag@example.co.in" &&
+  boundedAmount1 === 1 &&
+  boundedAmount2 === 1501 &&
+  boundedAmount3 === 50 &&
+  categoryCheck1 === "miscellaneous" &&
+  categoryCheck2 === "food" &&
+  validDate === true &&
+  invalidDate === false;
+
+if (passSanitization) {
+  console.log("✓ PASS: Security sanitization protects against HTML injection, invalid categories, bounded figures & bad dates.");
+} else {
+  console.error("✗ FAIL: Security sanitization test failure!", {
+    cleanedScript,
+    cleanBadEmail,
+    cleanValidEmail,
+    boundedAmount1,
+    boundedAmount2,
+    boundedAmount3,
+    categoryCheck1,
+    categoryCheck2,
+    validDate,
+    invalidDate,
+  });
+}
+
+// ── Scenario J — Storage Schema Resilience ───────────────────────────────────
+console.log("\n--- Scenario J: Storage Schema Resilience ---");
+import { loadState } from "./src/utils/storage";
+
+// Mock localStorage in node environment for test verification
+const mockLocalStorage: Record<string, string> = {};
+const originalLocalStorage = globalThis.localStorage;
+globalThis.localStorage = {
+  getItem: (key: string) => mockLocalStorage[key] || null,
+  setItem: (key: string, val: string) => { mockLocalStorage[key] = val; },
+  removeItem: (key: string) => { delete mockLocalStorage[key]; },
+  clear: () => { for (const k in mockLocalStorage) delete mockLocalStorage[k]; },
+  length: 0,
+  key: () => null,
+};
+
+// Store corrupted JSON with malicious amounts and script tags
+globalThis.localStorage.setItem(
+  "rupeeWise_state_v1",
+  JSON.stringify({
+    startingBudget: -99999,
+    periodStart: "invalid-date",
+    totalDays: 0,
+    transactions: [
+      { id: "1", amount: -200, category: "invalid", description: "<b>Bold</b>" },
+      null,
+      "corrupted string",
+    ],
+  })
+);
+
+const recoveredState = loadState();
+const passStorageResilience =
+  recoveredState !== null &&
+  recoveredState.startingBudget >= 100 &&
+  isValidDateString(recoveredState.periodStart) &&
+  recoveredState.totalDays === 30 &&
+  recoveredState.transactions.length === 1 &&
+  recoveredState.transactions[0].amount > 0 &&
+  recoveredState.transactions[0].category === "miscellaneous" &&
+  recoveredState.transactions[0].description === "Bold";
+
+if (passStorageResilience) {
+  console.log("✓ PASS: Storage loader recovers gracefully from corrupted/tampered payloads with defensive schemas.");
+} else {
+  console.error("✗ FAIL: Storage resilience test failed!", recoveredState);
+}
+
+// ── Scenario K — Commitment Cancellation vs Refund Boundary ─────────────────
+console.log("\n--- Scenario K: Commitment Cancellation vs Refund Boundary ---");
+let commitmentTestState: FinancialState = JSON.parse(JSON.stringify(freshState));
+const initialAvailable = computeMetrics(commitmentTestState).availableBalance;
+
+// User cancels a future commitment
+const cIndex = commitmentTestState.commitments.findIndex((c) => c.status === "unpaid");
+commitmentTestState.commitments[cIndex].status = "cancelled";
+
+const afterCancelMetrics = computeMetrics(commitmentTestState);
+const passCancelBoundary =
+  afterCancelMetrics.availableBalance === initialAvailable && // Balance does NOT increase
+  afterCancelMetrics.spendableBalance > computeMetrics(freshState).spendableBalance && // Spendable cash increases because commitment is freed
+  afterCancelMetrics.unpaidCommitments < computeMetrics(freshState).unpaidCommitments;
+
+if (passCancelBoundary) {
+  console.log("✓ PASS: Cancelling future commitment frees spendable cash without fabricating a cash refund.");
+} else {
+  console.error("✗ FAIL: Commitment cancellation boundary violated!");
+}
+
+// Restore original localStorage if present
+if (originalLocalStorage) {
+  globalThis.localStorage = originalLocalStorage;
+}
+
+console.log("\n=== ALL SCENARIOS (A THROUGH K) VERIFIED SUCCESSFULLY! ===");

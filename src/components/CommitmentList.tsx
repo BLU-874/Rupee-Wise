@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, Clock, XCircle, AlertCircle, Star } from "lucide-react";
 import type { Commitment } from "../types/finance";

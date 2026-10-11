@@ -300,7 +300,7 @@ export interface SimulationResult {
 export function simulatePurchase(
   state: FinancialState,
   purchaseAmount: number,
-  essential: boolean,
+  _essential: boolean = false,
   customCategory: string = "miscellaneous"
 ): SimulationResult {
   const before = computeMetrics(state);

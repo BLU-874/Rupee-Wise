@@ -1,4 +1,3 @@
-import React from "react";
 import { FlaskConical, Zap } from "lucide-react";
 import type { FinancialState, PurchaseInput } from "../types/finance";
 import DecisionSimulator from "../components/DecisionSimulator";

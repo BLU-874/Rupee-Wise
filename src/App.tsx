@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, RotateCcw, Sparkles } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import HeroSection from "./components/HeroSection";
-import Overview from "./pages/Overview";
-import CalendarPage from "./pages/CalendarPage";
-import Transactions from "./pages/Transactions";
-import DecisionLab from "./pages/DecisionLab";
-import SavingsGoals from "./pages/SavingsGoals";
-import Commitments from "./pages/Commitments";
+import WorkspaceSkeleton from "./components/WorkspaceSkeleton";
 import OnboardingModal from "./components/OnboardingModal";
 import ProfileModal from "./components/ProfileModal";
+
+// Lazy-loaded workspace pages for optimal initial bundle loading
+const Overview = lazy(() => import("./pages/Overview"));
+const CalendarPage = lazy(() => import("./pages/CalendarPage"));
+const Transactions = lazy(() => import("./pages/Transactions"));
+const DecisionLab = lazy(() => import("./pages/DecisionLab"));
+const SavingsGoals = lazy(() => import("./pages/SavingsGoals"));
+const Commitments = lazy(() => import("./pages/Commitments"));
 import { DEMO_STATE, DEMO_PROFILE } from "./data/demoData";
 import {
   loadState,
@@ -343,10 +346,11 @@ export default function App() {
                 </button>
               )}
 
-              {/* Notification placeholder */}
+              {/* Notification button */}
               <button
-                className="w-8 h-8 rounded-lg bg-[#F7F6FC] border border-[#E8E5F0] flex items-center justify-center text-[#77748B] hover:text-[#5138EC] hover:bg-white transition-colors"
+                className="w-8 h-8 rounded-lg bg-[#F7F6FC] border border-[#E8E5F0] flex items-center justify-center text-[#77748B] hover:text-[#5138EC] hover:bg-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
                 title="Notifications"
+                aria-label="View notifications"
               >
                 <Bell size={15} />
               </button>
@@ -354,8 +358,9 @@ export default function App() {
               {/* Reset Demo Data */}
               <button
                 onClick={() => setShowReset(true)}
-                className="w-8 h-8 rounded-lg bg-[#F7F6FC] border border-[#E8E5F0] flex items-center justify-center text-[#77748B] hover:text-[#D65D69] hover:bg-white transition-colors"
-                title="Reset demo data"
+                className="w-8 h-8 rounded-lg bg-[#F7F6FC] border border-[#E8E5F0] flex items-center justify-center text-[#77748B] hover:text-[#D65D69] hover:bg-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D65D69]"
+                title="Reset simulation data"
+                aria-label="Reset simulation data to demo baseline"
               >
                 <RotateCcw size={14} />
               </button>
@@ -372,45 +377,47 @@ export default function App() {
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.2 }}
               >
-                {activePage === "overview" && (
-                  <Overview
-                    state={state}
-                    metrics={metrics}
-                    onMarkCommitmentPaid={markCommitmentPaid}
-                    onCancelCommitment={cancelCommitment}
-                    onUpdateGoal={updateGoal}
-                    onAddSavings={addSavings}
-                  />
-                )}
-                {activePage === "calendar" && (
-                  <CalendarPage
-                    state={state}
-                    onAddTransaction={addTransaction}
-                  />
-                )}
-                {activePage === "transactions" && (
-                  <Transactions state={state} onAddTransaction={addTransaction} />
-                )}
-                {activePage === "decisionlab" && (
-                  <DecisionLab state={state} onConfirmPurchase={confirmPurchase} />
-                )}
-                {activePage === "savings" && (
-                  <SavingsGoals
-                    state={state}
-                    metrics={metrics}
-                    onUpdateGoal={updateGoal}
-                    onAddSavings={addSavings}
-                    onAddGoal={addGoal}
-                  />
-                )}
-                {activePage === "commitments" && (
-                  <Commitments
-                    state={state}
-                    onMarkPaid={markCommitmentPaid}
-                    onCancel={cancelCommitment}
-                    onAddCommitment={addCommitment}
-                  />
-                )}
+                <Suspense fallback={<WorkspaceSkeleton />}>
+                  {activePage === "overview" && (
+                    <Overview
+                      state={state}
+                      metrics={metrics}
+                      onMarkCommitmentPaid={markCommitmentPaid}
+                      onCancelCommitment={cancelCommitment}
+                      onUpdateGoal={updateGoal}
+                      onAddSavings={addSavings}
+                    />
+                  )}
+                  {activePage === "calendar" && (
+                    <CalendarPage
+                      state={state}
+                      onAddTransaction={addTransaction}
+                    />
+                  )}
+                  {activePage === "transactions" && (
+                    <Transactions state={state} onAddTransaction={addTransaction} />
+                  )}
+                  {activePage === "decisionlab" && (
+                    <DecisionLab state={state} onConfirmPurchase={confirmPurchase} />
+                  )}
+                  {activePage === "savings" && (
+                    <SavingsGoals
+                      state={state}
+                      metrics={metrics}
+                      onUpdateGoal={updateGoal}
+                      onAddSavings={addSavings}
+                      onAddGoal={addGoal}
+                    />
+                  )}
+                  {activePage === "commitments" && (
+                    <Commitments
+                      state={state}
+                      onMarkPaid={markCommitmentPaid}
+                      onCancel={cancelCommitment}
+                      onAddCommitment={addCommitment}
+                    />
+                  )}
+                </Suspense>
               </motion.div>
             </AnimatePresence>
           </main>
@@ -445,6 +452,9 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-dialog-title"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -452,20 +462,20 @@ export default function App() {
               exit={{ scale: 0.95, opacity: 0 }}
               className="bg-white border border-[#E8E5F0] rounded-2xl p-6 w-80 shadow-2xl"
             >
-              <h3 className="text-base font-bold text-[#211F35] mb-2">Reset Demo Data?</h3>
+              <h3 id="reset-dialog-title" className="text-base font-bold text-[#211F35] mb-2">Reset Demo Data?</h3>
               <p className="text-sm text-[#77748B] mb-5 leading-relaxed">
                 This will erase all your changes and restore the original demo data. This action cannot be undone.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={handleResetDemoData}
-                  className="flex-1 bg-[#D65D69] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#c24b57] transition-colors shadow-xs"
+                  className="flex-1 bg-[#D65D69] text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-[#c24b57] transition-colors shadow-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D65D69]"
                 >
                   Reset
                 </button>
                 <button
                   onClick={() => setShowReset(false)}
-                  className="flex-1 bg-[#F0EEFA] text-[#77748B] rounded-xl py-2.5 text-sm hover:text-[#211F35] transition-colors border border-[#E8E5F0]"
+                  className="flex-1 bg-[#F0EEFA] text-[#77748B] rounded-xl py-2.5 text-sm hover:text-[#211F35] transition-colors border border-[#E8E5F0] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
                 >
                   Cancel
                 </button>

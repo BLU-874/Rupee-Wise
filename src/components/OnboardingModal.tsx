@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, ArrowRight, User, Mail, Palette, X } from "lucide-react";
 import type { UserProfile } from "../types/finance";
+import { sanitizeText, sanitizeEmail } from "../utils/sanitize";
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -27,20 +28,33 @@ export default function OnboardingModal({
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0].hex);
   const [errors, setErrors] = useState<{ fullName?: string; email?: string }>({});
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   function validate(): boolean {
+    const cleanName = sanitizeText(fullName, 50);
     const newErrors: { fullName?: string; email?: string } = {};
-    if (!fullName.trim()) {
+
+    if (!cleanName) {
       newErrors.fullName = "Please enter your full name.";
-    } else if (fullName.trim().length < 2) {
+    } else if (cleanName.length < 2) {
       newErrors.fullName = "Name must be at least 2 characters.";
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const cleanEmail = sanitizeEmail(email);
     if (!email.trim()) {
       newErrors.email = "Please enter your email address.";
-    } else if (!emailRegex.test(email.trim())) {
+    } else if (!cleanEmail) {
       newErrors.email = "Please enter a valid email address.";
     }
 
@@ -53,8 +67,8 @@ export default function OnboardingModal({
     if (!validate()) return;
 
     const profile: UserProfile = {
-      fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
+      fullName: sanitizeText(fullName, 50),
+      email: sanitizeEmail(email),
       avatarColor,
       createdAt: new Date().toISOString().slice(0, 10),
     };
@@ -62,8 +76,7 @@ export default function OnboardingModal({
     onComplete(profile);
   }
 
-  const initials = fullName
-    .trim()
+  const initials = sanitizeText(fullName, 50)
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -72,7 +85,12 @@ export default function OnboardingModal({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="onboarding-modal-title"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -82,8 +100,9 @@ export default function OnboardingModal({
         >
           {/* Close button */}
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-5 right-5 p-2 rounded-xl text-[#77748B] hover:text-[#211F35] hover:bg-[#F0EEFA] transition-colors"
+            className="absolute top-5 right-5 p-2 rounded-xl text-[#77748B] hover:text-[#211F35] hover:bg-[#F0EEFA] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC] transition-colors"
             aria-label="Close onboarding modal"
           >
             <X size={18} />
@@ -91,14 +110,14 @@ export default function OnboardingModal({
 
           {/* Header */}
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-2xl bg-[#EEEAFE] flex items-center justify-center text-[#5138EC]">
+            <div className="w-10 h-10 rounded-2xl bg-[#EEEAFE] flex items-center justify-center text-[#5138EC]" aria-hidden="true">
               <Sparkles size={20} />
             </div>
             <div>
               <span className="text-xs font-semibold uppercase tracking-wider text-[#7661F5]">
                 Welcome to RupeeWise
               </span>
-              <h2 className="text-xl font-bold text-[#211F35] tracking-tight">
+              <h2 id="onboarding-modal-title" className="text-xl font-bold text-[#211F35] tracking-tight">
                 Start Your 30-Day Journey
               </h2>
             </div>
@@ -112,14 +131,16 @@ export default function OnboardingModal({
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Full Name */}
             <div>
-              <label className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
-                <User size={13} className="text-[#77748B]" />
-                Full Name
+              <label htmlFor="onboarding-fullname" className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
+                <User size={13} className="text-[#77748B]" aria-hidden="true" />
+                <span>Full Name</span>
               </label>
               <input
+                id="onboarding-fullname"
                 type="text"
                 placeholder="e.g. Aditi Rao"
                 value={fullName}
+                maxLength={50}
                 onChange={(e) => {
                   setFullName(e.target.value);
                   if (errors.fullName) setErrors((prev) => ({ ...prev, fullName: undefined }));
@@ -131,20 +152,22 @@ export default function OnboardingModal({
                 }`}
               />
               {errors.fullName && (
-                <p className="text-[11px] text-[#D65D69] mt-1 font-medium">{errors.fullName}</p>
+                <p className="text-[11px] text-[#D65D69] mt-1 font-medium" role="alert">{errors.fullName}</p>
               )}
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
-                <Mail size={13} className="text-[#77748B]" />
-                Email Address
+              <label htmlFor="onboarding-email" className="block text-xs font-semibold text-[#211F35] mb-1.5 flex items-center gap-1.5">
+                <Mail size={13} className="text-[#77748B]" aria-hidden="true" />
+                <span>Email Address</span>
               </label>
               <input
+                id="onboarding-email"
                 type="email"
                 placeholder="aditi@example.com"
                 value={email}
+                maxLength={100}
                 onChange={(e) => {
                   setEmail(e.target.value);
                   if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
@@ -156,39 +179,41 @@ export default function OnboardingModal({
                 }`}
               />
               {errors.email && (
-                <p className="text-[11px] text-[#D65D69] mt-1 font-medium">{errors.email}</p>
+                <p className="text-[11px] text-[#D65D69] mt-1 font-medium" role="alert">{errors.email}</p>
               )}
             </div>
 
             {/* Avatar Color Picker & Live Preview */}
             <div>
               <label className="block text-xs font-semibold text-[#211F35] mb-2 flex items-center gap-1.5">
-                <Palette size={13} className="text-[#77748B]" />
-                Avatar Theme & Preview
+                <Palette size={13} className="text-[#77748B]" aria-hidden="true" />
+                <span>Avatar Theme & Preview</span>
               </label>
               <div className="flex items-center gap-4">
                 {/* Live Avatar Preview */}
                 <div
                   className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-base shadow-sm border border-white/20 transition-colors"
                   style={{ backgroundColor: avatarColor }}
+                  aria-label={`Current avatar preview: ${initials}`}
                 >
                   {initials}
                 </div>
 
                 {/* Color Swatches */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2" role="group" aria-label="Avatar color options">
                   {AVATAR_COLORS.map((c) => (
                     <button
                       key={c.hex}
                       type="button"
                       onClick={() => setAvatarColor(c.hex)}
-                      className={`w-7 h-7 rounded-xl transition-transform ${
+                      className={`w-7 h-7 rounded-xl transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC] ${
                         avatarColor === c.hex
                           ? "ring-2 ring-offset-2 ring-[#5138EC] scale-110"
                           : "hover:scale-105 opacity-85 hover:opacity-100"
                       }`}
                       style={{ backgroundColor: c.hex }}
                       aria-label={`Select ${c.label} avatar color`}
+                      aria-pressed={avatarColor === c.hex}
                     />
                   ))}
                 </div>
@@ -199,7 +224,7 @@ export default function OnboardingModal({
             <div className="pt-3">
               <button
                 type="submit"
-                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#7661F5] to-[#5138EC] hover:from-[#8875FF] hover:to-[#5E47F3] text-white font-semibold text-sm shadow-md shadow-[#5138EC]/25 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#7661F5] to-[#5138EC] hover:from-[#8875FF] hover:to-[#5E47F3] text-white font-semibold text-sm shadow-md shadow-[#5138EC]/25 transition-all flex items-center justify-center gap-2 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5138EC]"
               >
                 <span>Enter RupeeWise</span>
                 <ArrowRight size={16} />

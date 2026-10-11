@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Target, Plus, Edit2, Check, X } from "lucide-react";
 import type { SavingsGoal, FinancialMetrics } from "../types/finance";
